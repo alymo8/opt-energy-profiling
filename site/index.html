@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPT-350m Energy Profiling</title>
+<meta name="description" content="Energy and resource profiling of OPT-350m training across batch sizes: overhead, throughput, energy efficiency and GPU underutilization. COMP 597, McGill University, Winter 2026.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f3ec; --surface: #fffdf8; --ink: #1d2320; --muted: #5d6762; --line: #e2ddd1;
+  --accent: #1f6f5c; --accent-soft: #d9ebe4;
+  --fwd: #3b82a0; --bwd: #1f6f5c; --opt: #d9822b;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --surface: #1a201d; --ink: #e8ebe9; --muted: #9aa5a0; --line: #2b3430;
+    --accent: #5fc2a4; --accent-soft: #1f3a32;
+    --fwd: #67b3d3; --bwd: #5fc2a4; --opt: #f0a356;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121614; --surface: #1a201d; --ink: #e8ebe9; --muted: #9aa5a0; --line: #2b3430;
+  --accent: #5fc2a4; --accent-soft: #1f3a32;
+  --fwd: #67b3d3; --bwd: #5fc2a4; --opt: #f0a356;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 Inter, system-ui, sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.hero { padding: 72px 0 40px; border-bottom: 1px solid var(--line); }
+.eyebrow { font: 500 13px/1 "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: Fraunces, Georgia, serif; font-weight: 650; font-size: clamp(34px, 6vw, 58px); line-height: 1.05; letter-spacing: -.02em; margin: 14px 0 18px; }
+h2 { font-family: Fraunces, Georgia, serif; font-weight: 650; font-size: clamp(26px, 4vw, 34px); letter-spacing: -.01em; margin: 0 0 12px; }
+h3 { font-size: 17px; margin: 0 0 6px; }
+.lede { font-size: 19px; color: var(--muted); max-width: 720px; margin: 0; }
+.byline { margin-top: 18px; color: var(--muted); font-size: 15px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.btn:hover { filter: brightness(1.05); }
+section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+section > .wrap > p.intro { color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+.stat .num { font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 650; line-height: 1.1; color: var(--accent); }
+.stat .lbl { font-weight: 600; margin-top: 4px; }
+.stat p { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+.qs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; counter-reset: q; }
+.qs .card::before { counter-increment: q; content: "Q" counter(q); font: 500 13px "JetBrains Mono", monospace; color: var(--accent); display: block; margin-bottom: 8px; }
+.qs p { margin: 0; color: var(--muted); font-size: 15px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+td code, p code, li code { font: 13.5px "JetBrains Mono", monospace; background: var(--accent-soft); padding: 1px 6px; border-radius: 5px; }
+.table-scroll { overflow-x: auto; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.chart h3 { margin-bottom: 2px; }
+.chart .sub { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+.bar-row { display: grid; grid-template-columns: 34px 1fr 64px; align-items: center; gap: 10px; margin: 10px 0; font-size: 14px; }
+.bar-row .k { font: 500 13px "JetBrains Mono", monospace; color: var(--muted); }
+.bar-track { height: 22px; background: var(--accent-soft); border-radius: 6px; overflow: hidden; display: flex; }
+.bar { height: 100%; background: var(--accent); }
+.bar.fwd { background: var(--fwd); } .bar.bwd { background: var(--bwd); } .bar.opt { background: var(--opt); }
+.bar-row .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; background: var(--c); }
+.wide { grid-column: 1 / -1; }
+.callout { border-left: 4px solid var(--opt); background: var(--surface); padding: 16px 20px; border-radius: 0 12px 12px 0; margin-top: 18px; }
+.callout p { margin: 0; }
+figure { margin: 0; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.gallery figure { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.gallery img { width: 100%; display: block; }
+.gallery figcaption { background: var(--surface); color: var(--muted); font-size: 14px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.ideas p { margin: 0; color: var(--muted); font-size: 15px; }
+pre { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; font: 13px/1.6 "JetBrains Mono", monospace; margin: 0 0 14px; }
+footer { padding: 36px 0 56px; color: var(--muted); font-size: 14px; }
+.theme-toggle { position: fixed; top: 14px; right: 14px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; width: 40px; height: 40px; cursor: pointer; font-size: 17px; }
+@media (max-width: 520px) { header.hero { padding-top: 64px; } .bar-row { grid-template-columns: 30px 1fr 56px; } }
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">◐</button>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">COMP 597 · Sustainability in Systems Design · McGill · Winter 2026</div>
+    <h1>Energy and Resource Profiling of OPT-350m Training</h1>
+    <p class="lede">Where does the energy go when you train a language model? We measured time, energy and GPU use for every training step of OPT-350m at three batch sizes, and found that one phase, the optimizer step, keeps the GPU from staying busy.</p>
+    <div class="byline">Aly Mohamed · April 2026</div>
+    <div class="actions">
+      <a class="btn primary" href="paper.pdf">Read the paper (PDF)</a>
+      <a class="btn" href="slides.pdf">Slides</a>
+      <a class="btn" href="https://github.com/alymo8/opt-energy-profiling">Code &amp; data on GitHub</a>
+    </div>
+  </div>
+</header>
+
+<section id="findings">
+  <div class="wrap">
+    <h2>Key findings</h2>
+    <p class="intro">Each configuration ran for 300 seconds and was repeated three times on a shared Slurm GPU cluster. All numbers are means over those three runs.</p>
+    <div class="stats">
+      <div class="card stat"><div class="num">&lt;0.1%</div><div class="lbl">Fine-grained profiling overhead</div><p>Per-step phase timers and NVML counters cost almost nothing. CodeCarbon energy tracking adds about 1.5%.</p></div>
+      <div class="card stat"><div class="num">96 ms</div><div class="lbl">Constant optimizer step</div><p>AdamW takes the same time at every batch size. At batch 4 that is 39% of each step.</p></div>
+      <div class="card stat"><div class="num">+55%</div><div class="lbl">Samples per joule, batch 4 → 16</div><p>Larger batches do more useful work per unit of energy.</p></div>
+      <div class="card stat"><div class="num">83–93%</div><div class="lbl">GPU utilization ceiling</div><p>The GPU never reaches 100%. Small batches leave the most capacity unused.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="questions">
+  <div class="wrap">
+    <h2>Research questions</h2>
+    <p class="intro">We built a controlled measurement framework around Meta's OPT-350m to answer three questions.</p>
+    <div class="qs">
+      <div class="card"><h3>Instrumentation cost</h3><p>How much overhead does detailed, per-step energy and resource measurement add to training?</p></div>
+      <div class="card"><h3>Batch size vs. efficiency</h3><p>How does batch size affect throughput, energy per step and energy efficiency?</p></div>
+      <div class="card"><h3>Lost GPU capacity</h3><p>Where inside the training loop does GPU utilization fall short of its maximum, and why?</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <h2>Experimental setup</h2>
+    <p class="intro"><code>facebook/opt-350m</code> in FP32 with sequence length 1024, learning rate 1e-6, seed 1234 and synthetic token data, so data loading adds no I/O. Every step is split into forward, backward and AdamW update, with <code>torch.cuda.synchronize()</code> around each phase so the timings reflect GPU work, not kernel dispatch. Batch sizes were picked by probing the largest size that fits in memory, which was 16, then halving it twice.</p>
+    <div class="card table-scroll">
+      <table>
+        <thead><tr><th>Profile</th><th>Instrumentation</th><th>What it measures</th></tr></thead>
+        <tbody>
+          <tr><td><strong>A</strong> · baseline</td><td><code>noop</code></td><td>End-to-end wall-clock time only</td></tr>
+          <tr><td><strong>B</strong> · energy</td><td>CodeCarbon 3.1 (offline, 40 gCO₂/kWh, Quebec grid)</td><td>End-to-end GPU energy and carbon</td></tr>
+          <tr><td><strong>C</strong> · fine-grained</td><td>Phase timers + NVML (nvidia-ml-py) + psutil</td><td>Per-step phase times, GPU power/energy/utilization/memory, CPU, RAM, I/O</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>Results</h2>
+    <p class="intro">Bigger batches take longer per step but process more samples per second. The optimizer is the one phase that does not scale with batch size.</p>
+    <div class="charts">
+      <div class="card chart">
+        <h3>Throughput</h3><p class="sub">Samples per second (Profile C)</p>
+        <div class="bar-row"><span class="k">B4</span><div class="bar-track"><div class="bar" style="width:64%"></div></div><span class="v">16.2</span></div>
+        <div class="bar-row"><span class="k">B8</span><div class="bar-track"><div class="bar" style="width:86.6%"></div></div><span class="v">21.9</span></div>
+        <div class="bar-row"><span class="k">B16</span><div class="bar-track"><div class="bar" style="width:100%"></div></div><span class="v">25.3</span></div>
+      </div>
+      <div class="card chart">
+        <h3>Energy per step</h3><p class="sub">µWh per training step (Profile C)</p>
+        <div class="bar-row"><span class="k">B4</span><div class="bar-track"><div class="bar" style="width:34%"></div></div><span class="v">12.0</span></div>
+        <div class="bar-row"><span class="k">B8</span><div class="bar-track"><div class="bar" style="width:54.7%"></div></div><span class="v">19.3</span></div>
+        <div class="bar-row"><span class="k">B16</span><div class="bar-track"><div class="bar" style="width:100%"></div></div><span class="v">35.3</span></div>
+      </div>
+      <div class="card chart">
+        <h3>Average GPU utilization</h3><p class="sub">Percent, Profile C</p>
+        <div class="bar-row"><span class="k">B4</span><div class="bar-track"><div class="bar" style="width:83.3%"></div></div><span class="v">83.3%</span></div>
+        <div class="bar-row"><span class="k">B8</span><div class="bar-track"><div class="bar" style="width:91.8%"></div></div><span class="v">91.8%</span></div>
+        <div class="bar-row"><span class="k">B16</span><div class="bar-track"><div class="bar" style="width:93.2%"></div></div><span class="v">93.2%</span></div>
+      </div>
+      <div class="card chart">
+        <h3>Profiling overhead</h3><p class="sub">Profile B vs. baseline A (5% budget)</p>
+        <div class="bar-row"><span class="k">B4</span><div class="bar-track"><div class="bar" style="width:29.8%"></div></div><span class="v">1.49%</span></div>
+        <div class="bar-row"><span class="k">B8</span><div class="bar-track"><div class="bar" style="width:29.2%"></div></div><span class="v">1.46%</span></div>
+        <div class="bar-row"><span class="k">B16</span><div class="bar-track"><div class="bar" style="width:32.2%"></div></div><span class="v">1.61%</span></div>
+      </div>
+      <div class="card chart wide">
+        <h3>Where a training step's time goes</h3><p class="sub">Per-step phase durations in ms. Bar length is proportional to total step time.</p>
+        <div class="bar-row"><span class="k">B4</span><div class="bar-track" style="width:39%"><div class="bar fwd" style="width:17.5%" title="Forward 43.0 ms"></div><div class="bar bwd" style="width:43%" title="Backward 105.3 ms"></div><div class="bar opt" style="width:39.5%" title="Optimizer 96.0 ms"></div></div><span class="v">245 ms</span></div>
+        <div class="bar-row"><span class="k">B8</span><div class="bar-track" style="width:57.7%"><div class="bar fwd" style="width:22.5%" title="Forward 81.6 ms"></div><div class="bar bwd" style="width:51%" title="Backward 184.7 ms"></div><div class="bar opt" style="width:26.5%" title="Optimizer 95.7 ms"></div></div><span class="v">363 ms</span></div>
+        <div class="bar-row"><span class="k">B16</span><div class="bar-track" style="width:100%"><div class="bar fwd" style="width:28.7%" title="Forward 180.3 ms"></div><div class="bar bwd" style="width:56%" title="Backward 352.1 ms"></div><div class="bar opt" style="width:15.3%" title="Optimizer 95.9 ms"></div></div><span class="v">629 ms</span></div>
+        <div class="legend"><span style="--c:var(--fwd)">Forward</span><span style="--c:var(--bwd)">Backward</span><span style="--c:var(--opt)">Optimizer (AdamW)</span></div>
+        <div class="callout"><p><strong>The optimizer doesn't scale with batch size.</strong> AdamW updates all 350M parameters on every step, however much data that step processed, so it holds at about 96 ms. It launches many small, memory-bound CUDA kernels that don't fill the GPU. At batch 4 it takes 39% of each step, and average utilization drops to 83%.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="figures">
+  <div class="wrap">
+    <h2>From the experiment logs</h2>
+    <p class="intro">These figures were generated directly from the final run (<code>results/e2e_experiments/run-8</code>). Shaded bands show one standard deviation across three repeats.</p>
+    <div class="gallery">
+      <figure><img loading="lazy" src="figures/cross_batch_throughput_steps_per_sec_vs_batch.png" alt="Steps per second versus batch size"><figcaption>Throughput (steps/s) across batch sizes</figcaption></figure>
+      <figure><img loading="lazy" src="figures/cross_batch_energy_per_step_vs_batch.png" alt="Energy per step versus batch size"><figcaption>Energy per step across batch sizes</figcaption></figure>
+      <figure><img loading="lazy" src="figures/cross_batch_profileC_phase_times_vs_batch.png" alt="Forward, backward and optimizer times versus batch size"><figcaption>Phase times: forward and backward grow with batch size, the optimizer stays flat</figcaption></figure>
+      <figure><img loading="lazy" src="figures/cross_batch_profileC_gpu_vs_batch.png" alt="GPU utilization versus batch size"><figcaption>GPU utilization and memory across batch sizes</figcaption></figure>
+      <figure class="wide"><img loading="lazy" src="figures/batch_4_profileC_gpu_idle_windows_timeline.png" alt="GPU low-utilization window timeline, batch 4"><figcaption>Batch 4: utilization stays below 95% for the whole run</figcaption></figure>
+      <figure class="wide"><img loading="lazy" src="figures/batch_8_profileC_gpu_idle_windows_timeline.png" alt="GPU low-utilization window timeline, batch 8"><figcaption>Batch 8: a few long low-utilization windows</figcaption></figure>
+      <figure class="wide"><img loading="lazy" src="figures/batch_16_profileC_gpu_idle_windows_timeline.png" alt="GPU low-utilization window timeline, batch 16"><figcaption>Batch 16: 29 short, recurring dips caused by the optimizer step</figcaption></figure>
+      <figure class="wide"><img loading="lazy" src="figures/batch_16_profileC_resource_timeline.png" alt="Full resource timeline for batch 16"><figcaption>Full resource timeline at batch 16: GPU utilization, memory, CPU and cumulative energy over 300 s</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="opportunities">
+  <div class="wrap">
+    <h2>Where to gain efficiency</h2>
+    <p class="intro">The measurements point to four concrete next steps.</p>
+    <div class="ideas">
+      <div class="card"><h3>Fused optimizer kernels</h3><p>Merging AdamW's per-tensor kernels into a single fused kernel attacks the fixed 96 ms directly. That would recover most of the lost utilization at small batch sizes.</p></div>
+      <div class="card"><h3>Gradient checkpointing</h3><p>Batch 16 was limited by memory, not compute, and efficiency was still rising. Trading recompute for memory would make larger, more efficient batches fit.</p></div>
+      <div class="card"><h3>Use the idle capacity</h3><p>On a shared cluster, the optimizer's unused GPU capacity can be given to another workload. A scheduler could co-locate light inference or preprocessing jobs instead of pushing one job to 100%.</p></div>
+      <div class="card"><h3>Dedicated node</h3><p>Shared-cluster noise was small (under 0.6 s spread across repeats). Smaller gains, such as those from kernel fusion, would need an isolated node to measure.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="reproduce">
+  <div class="wrap">
+    <h2>Reproduce it</h2>
+    <p class="intro">The repository contains the training framework, the experiment runner, the aggregation and plotting scripts, and all raw logs from the final run.</p>
+<pre>git clone https://github.com/alymo8/opt-energy-profiling
+cd opt-energy-profiling
+pip install -r requirements.txt
+
+# batch sweep x profiles A/B/C x 3 repeats of 300 s
+python3 scripts/run_opt_experiments.py --repo-root . \
+  --output-root ./results/e2e_experiments/run-N \
+  --launcher "python3 launch.py" --duration-sec 300 --repeats 3
+
+python3 scripts/aggregate_opt_experiments.py ./results/e2e_experiments/run-N/&lt;opt-run-timestamp&gt;</pre>
+    <h3>Cite</h3>
+<pre>@techreport{mohamed2026optenergy,
+  title       = {Energy and Resource Profiling of OPT-350m Training},
+  author      = {Mohamed, Aly},
+  institution = {McGill University, COMP 597: Sustainability in Systems Design},
+  year        = {2026},
+  month       = apr,
+  url         = {https://alymo8.github.io/opt-energy-profiling/}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Built on the COMP 597 starter code from the McGill course staff. OPT: Zhang et al., <a href="https://arxiv.org/abs/2205.01068">arXiv:2205.01068</a>, 2022. · <a href="paper.pdf">Paper</a> · <a href="https://github.com/alymo8/opt-energy-profiling">GitHub</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById('themeToggle');
+  try { var saved = localStorage.getItem('theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  btn.addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
