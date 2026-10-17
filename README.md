@@ -3,7 +3,7 @@
 **Project site:** https://alymo8.github.io/opt-energy-profiling/
 **Paper (PDF):** [paper/opt-350m-energy-profiling-report.pdf](paper/opt-350m-energy-profiling-report.pdf) · **Slides:** [paper/opt-350m-energy-profiling-slides.pdf](paper/opt-350m-energy-profiling-slides.pdf)
 
-Research project for COMP 597 (Sustainability in Systems Design), McGill University, Winter 2026, by Aly Mohamed.
+Research at McGill University, by Aly Mohamed.
 
 We profile training of Meta's [OPT-350m](https://huggingface.co/facebook/opt-350m) at batch sizes 4, 8 and 16 on a shared Slurm GPU cluster. For each run we measure wall-clock time, energy and per-step resource use under three instrumentation profiles. Each configuration runs for 300 seconds and is repeated 3 times.
 
